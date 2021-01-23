@@ -6,8 +6,7 @@ plugins {
 
 buildscript {
     repositories {
-        mavenCentral()
-
+        jcenter()
     }
 }
 
@@ -16,7 +15,7 @@ group = "skywolf46"
 version = properties["version"] as String
 
 repositories {
-    mavenCentral()
+    jcenter()
     maven("https://maven.pkg.github.com/milkyway0308/CommandAnnotation") {
         credentials {
             username = properties["gpr.user"] as String
@@ -39,6 +38,7 @@ dependencies {
     implementation ("org.apache.httpcomponents:httpclient:4.5.13");
     implementation ("org.apache.httpcomponents:fluent-hc:4.5.13");
     implementation ("org.jsoup:jsoup:1.13.1")
+    implementation ("com.sedmelluq:lavaplayer:1.3.66")
 }
 
 publishing {

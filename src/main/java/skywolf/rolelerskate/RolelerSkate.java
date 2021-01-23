@@ -1,14 +1,30 @@
 package skywolf.rolelerskate;
 
 import br.com.azalim.mcserverping.MCPingResponse;
+import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import discord4j.common.util.Snowflake;
 import discord4j.core.DiscordClient;
 import discord4j.core.GatewayDiscordClient;
+import discord4j.core.event.domain.VoiceStateUpdateEvent;
 import discord4j.core.event.domain.message.MessageCreateEvent;
 import discord4j.core.event.domain.message.ReactionAddEvent;
 import discord4j.core.object.Embed;
 import discord4j.core.object.entity.*;
+import discord4j.core.object.entity.channel.Channel;
+import discord4j.core.object.entity.channel.GuildChannel;
+import discord4j.core.object.entity.channel.VoiceChannel;
+import discord4j.core.object.presence.Activity;
+import discord4j.core.object.presence.Presence;
 import discord4j.core.object.reaction.ReactionEmoji;
 import discord4j.core.shard.GatewayBootstrap;
+import discord4j.discordjson.json.ImmutableActivityData;
+import discord4j.discordjson.json.ImmutablePresenceData;
+import discord4j.discordjson.json.ImmutableUserData;
+import discord4j.discordjson.json.gateway.ImmutableStatusUpdate;
+import discord4j.discordjson.json.gateway.StatusUpdate;
 import discord4j.gateway.intent.IntentSet;
 import discord4j.rest.util.Color;
 import skywolf.rolelerskate.apple.AppleProductFinder;
@@ -18,6 +34,7 @@ import skywolf.rolelerskate.eve.universe.SystemSearcher;
 import skywolf.rolelerskate.maplestory.CharacterInfoGathering;
 import skywolf.rolelerskate.maplestory.UserIDGathering;
 import skywolf.rolelerskate.minecraft.MinecraftPingUtil;
+import skywolf.rolelerskate.voice.ThinkingChair;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -29,8 +46,9 @@ import java.util.stream.Collectors;
 @SuppressWarnings("ALL")
 public class RolelerSkate {
 
-    private static final String VERSION = "Alpha 0.0.18";
+    private static final String VERSION = "Alpha 0.0.19";
 
+    private static HashMap<Snowflake, ThinkingChair> THINKING = new HashMap<>();
     private static ExecutorService EXECUTOR = Executors.newCachedThreadPool();
 
     private static List<String> ERRORS = new ArrayList<>(
@@ -47,6 +65,7 @@ public class RolelerSkate {
             )
     );
 
+
     private static Random random = new Random();
 
     public static String getRandomMessage() {
@@ -62,6 +81,8 @@ public class RolelerSkate {
         final GatewayDiscordClient gateway = GatewayBootstrap.create(client).setEnabledIntents(
                 IntentSet.all()
         ).login().block();
+//        Activity
+//        gateway.updatePresence(su);
 //        for (Guild g : gateway.getGuilds().toIterable()) {
 //
 //            int top = Integer.MAX_VALUE;
@@ -80,6 +101,67 @@ public class RolelerSkate {
 //            }).block();
 //        }
 
+//        for (Guild g : gateway.getGuilds().toIterable()) {
+//            for (GuildChannel gg : g.getChannels().toIterable()) {
+//                if (gg.getType() == Channel.Type.GUILD_VOICE) {
+//                    if (gg.getName().equals("생각하는-의자")) {
+//                        VoiceChannel vc = (VoiceChannel) gg;
+//                        vc.join(spec -> {
+//                            ThinkingChair thinkering = THINKING.computeIfAbsent(g.getId(), a -> new ThinkingChair());
+//                            spec.setSelfDeaf(true);
+//                            spec.setProvider(thinkering.getProvider());
+//                        }).block();
+//                    }
+//                }
+//            }
+//        }
+        gateway.on(VoiceStateUpdateEvent.class).subscribe(ev -> {
+            if (ev.isJoinEvent()) {
+                VoiceChannel vc = ev.getCurrent().getChannel().block();
+                if (!vc.getName().equals("생각하는 의자"))
+                    return;
+                if (vc.isMemberConnected(gateway.getSelfId()).block()) {
+                    return;
+                }
+                synchronized (RolelerSkate.class) {
+                    ThinkingChair tc = THINKING.computeIfAbsent(vc.getGuildId(), xa -> new ThinkingChair());
+                    vc.join(spec -> {
+                        spec.setSelfDeaf(true);
+//                        tc.restart();
+                        spec.setProvider(tc.getProvider());
+
+                    }).block();
+                }
+            } else {
+                if (!ev.getOld().isPresent())
+                    return;
+                VoiceChannel vc = ev.getOld().get().getChannel().block();
+                if (!vc.getName().equals("생각하는 의자"))
+                    return;
+                if (vc.getVoiceStates().count().block() == 1) {
+                    synchronized (RolelerSkate.class) {
+                        vc.getVoiceConnection().block().disconnect().block();
+                        ThinkingChair tc = THINKING.remove(vc.getGuildId());
+                        tc.stop();
+                    }
+                }
+            }
+//            VoiceChannel vc = (ev.isJoinEvent() ? ev.getCurrent().getChannel().block() : ev.getOld().get().getChannel().block());
+//            if (vc.isMemberConnected(gateway.getSelfId()).block()) {
+//                ThinkingChair tc = THINKING.get(ev.getCurrent().getGuildId());
+//                if (tc == null)
+//                    return;
+//                if (ev.isLeaveEvent()) {
+//                    if (vc.getVoiceStates().count().block() == 1) {
+//                        tc.stop();
+//                    }
+//                } else if (ev.isJoinEvent()) {
+//                    if (vc.getVoiceStates().count().block() == 2) {
+//                        tc.restart();
+//                    }
+//                }
+//            }
+        });
         gateway
                 .on(MessageCreateEvent.class).subscribe(event -> {
             final Message message = event.getMessage();
@@ -549,7 +631,7 @@ public class RolelerSkate {
                             }).block();
                             return;
                         }
-                        if(product.size() <= 0){
+                        if (product.size() <= 0) {
                             msg.edit(mSpec -> {
                                 mSpec.setEmbed(spec -> {
                                     spec.setColor(Color.RED)
@@ -567,7 +649,7 @@ public class RolelerSkate {
                                         .addField("가격", pr.getPrice(), true)
                                         .addField("신상 여부", String.valueOf(pr.isNew()), true)
                                         .setUrl(pr.getProductURL())
-                                        .setImage(pr.getImageURL())
+                                        .setThumbnail(pr.getImageURL())
                                         .setFooter("RolelerSkate " + VERSION, null);
                             });
                         }).block();
@@ -583,6 +665,131 @@ public class RolelerSkate {
                     }
                 });
 
+            } else if (message.getContent().equals("Music.poll();")) {
+                synchronized (RolelerSkate.class) {
+                    ThinkingChair chair = THINKING.get(message.getGuildId().get());
+                    if (chair != null) {
+                        chair.skip();
+                        message.getChannel().block().createEmbed(spec -> {
+                            spec.setColor(Color.GREEN)
+                                    .addField("정보", "음악이 스킵되었습니다.", false)
+                                    .setFooter("RolelerSkate " + VERSION, null);
+                        }).block();
+                    } else {
+                        message.getChannel().block().createEmbed(spec -> {
+                            spec.setColor(Color.RED)
+                                    .addField("이런!", "봇이 통화방에 참여한 상태가 아닙니다.", false)
+                                    .setFooter("RolelerSkate " + VERSION, null);
+                        }).block();
+                    }
+                }
+            } else if (message.getContent().equals("Music.peek();")) {
+                synchronized (RolelerSkate.class) {
+                    ThinkingChair chair = THINKING.get(message.getGuildId().get());
+                    if (chair != null) {
+                        AudioTrack tr = chair.getCurrentTrack();
+
+                        message.getChannel().block().createEmbed(spec -> {
+                            spec.setColor(Color.GREEN)
+                                    .setTitle(tr.getInfo().title)
+                                    .setUrl(tr.getInfo().uri)
+                                    .addField("재생 시간", toMinuteSecond((int) (tr.getPosition() / 1000)) + " / " + toMinuteSecond((int) (tr.getDuration() / 1000)), false)
+                                    .setFooter("RolelerSkate " + VERSION, null);
+
+                        }).block();
+                    } else {
+                        message.getChannel().block().createEmbed(spec -> {
+                            spec.setColor(Color.RED)
+                                    .addField("이런!", "봇이 통화방에 참여한 상태가 아닙니다.", false)
+                                    .setFooter("RolelerSkate " + VERSION, null);
+                        }).block();
+                    }
+                }
+            } else if (message.getContent().startsWith("Music.queue(")) {
+                if (!message.getContent().endsWith(");"))
+                    return;
+                String substring = message.getContent();
+                substring = substring.substring(substring.indexOf("(") + 1, substring.lastIndexOf(")")).trim();
+                if (substring.isEmpty()) {
+                    message.getChannel().block().createEmbed(spec -> {
+                        spec.setColor(Color.RED)
+                                .addField("오류!", "반드시 링크를 입력해야 합니다.", false);
+                    }).block();
+                    return;
+                }
+                message.delete().block();
+                ThinkingChair chair = THINKING.get(message.getGuildId().get());
+                if (chair != null) {
+                    Message msg = message.getChannel().block().createEmbed(spec -> {
+                        spec.setColor(Color.GRAY)
+                                .addField("정보", "링크를 불러오는 중...", false);
+                    }).block();
+                    String finalSubstring = substring;
+                    EXECUTOR.submit(() -> {
+                        ThinkingChair.PLAYER_MANAGER.loadItem(finalSubstring, new AudioLoadResultHandler() {
+                            @Override
+                            public void trackLoaded(AudioTrack track) {
+                                msg.edit(mSpec -> {
+                                    mSpec.setEmbed(spec -> {
+                                        spec
+                                                .setColor(Color.GREEN)
+                                                .setTitle(track.getInfo().title)
+                                                .setUrl(track.getInfo().uri)
+                                                .setDescription("다음 대기열에 1개의 영상이 추가되었습니다.");
+                                    });
+                                }).block();
+                                chair.queue(track);
+                            }
+
+                            @Override
+                            public void playlistLoaded(AudioPlaylist playlist) {
+                                msg.edit(mSpec -> {
+                                    mSpec.setEmbed(spec -> {
+                                        spec
+                                                .setColor(Color.GREEN)
+                                                .setTitle(playlist.getName())
+                                                .setUrl(finalSubstring)
+                                                .setDescription("다음 대기열에 " + playlist.getTracks().size() + "개의 영상이 추가되었습니다.");
+                                    });
+                                }).block();
+                                for (AudioTrack tr : playlist.getTracks())
+                                    chair.queue(tr);
+                            }
+
+                            @Override
+                            public void noMatches() {
+                                msg.edit(mSpec -> {
+                                    mSpec.setEmbed(spec -> {
+                                        spec
+                                                .setColor(Color.GREEN)
+                                                .setTitle("오류 발생!")
+                                                .setUrl(finalSubstring)
+                                                .setDescription("일치하는 영상이 존재하지 않아 대기열 추가에 실패하였습니다.");
+                                    });
+                                }).block();
+                            }
+
+                            @Override
+                            public void loadFailed(FriendlyException exception) {
+                                msg.edit(mSpec -> {
+                                    mSpec.setEmbed(spec -> {
+                                        spec
+                                                .setColor(Color.GREEN)
+                                                .setTitle("오류 발생!")
+                                                .setUrl(finalSubstring)
+                                                .setDescription("링크에서 데이터를 불러 올 수 없습니다.");
+                                    });
+                                }).block();
+                            }
+                        });
+                    });
+                } else {
+                    message.getChannel().block().createEmbed(spec -> {
+                        spec.setColor(Color.RED)
+                                .addField("이런!", "봇이 통화방에 참여한 상태가 아닙니다.", false)
+                                .setFooter("RolelerSkate " + VERSION, null);
+                    }).block();
+                }
             }
         });
 
@@ -654,5 +861,11 @@ public class RolelerSkate {
                 });
 
         gateway.onDisconnect().block();
+    }
+
+    private static String toMinuteSecond(int sec) {
+        int min = sec / 60;
+        sec -= min * 60;
+        return min + "분 " + sec + "초";
     }
 }
