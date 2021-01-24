@@ -122,4 +122,8 @@ public class ThinkingChair extends AudioEventAdapter {
         if (playNext)
             playNext();
     }
+
+    public boolean hasNext() {
+        return tracks.size() > 0 && player.getPlayingTrack() != null && player.getPlayingTrack().getState() != AudioTrackState.PLAYING;
+    }
 }
