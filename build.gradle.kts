@@ -4,6 +4,7 @@ plugins {
     id("com.github.johnrengelman.shadow") version "2.0.4"
 }
 
+
 buildscript {
     repositories {
         jcenter()
@@ -39,6 +40,12 @@ dependencies {
     implementation ("org.apache.httpcomponents:fluent-hc:4.5.13");
     implementation ("org.jsoup:jsoup:1.13.1")
     implementation ("com.sedmelluq:lavaplayer:1.3.66")
+}
+
+val jar by tasks.getting(Jar::class) {
+    manifest {
+        attributes["Main-Class"] = "skywolf46.rolelerskate.RolelerSkate"
+    }
 }
 
 publishing {
